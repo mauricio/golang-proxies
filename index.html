@@ -1,0 +1,423 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <title>Building a proxy server in Golang</title>
+
+    <link rel="stylesheet" href="css/reveal.css">
+    <link rel="stylesheet" href="css/theme/black.css">
+
+    <!-- Theme used for syntax highlighting of code -->
+    <link rel="stylesheet" href="lib/css/zenburn.css">
+
+    <!-- Printing and PDF exports -->
+    <script>
+        var link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.type = 'text/css';
+        link.href = window.location.search.match(/print-pdf/gi) ? 'css/print/pdf.css' : 'css/print/paper.css';
+        document.getElementsByTagName('head')[0].appendChild(link);
+    </script>
+</head>
+<body>
+<div class="reveal">
+    <div class="slides">
+
+        <section>
+            <h1>Building a proxy server in Golang</h1>
+            <p>
+                <small>
+                    <a href="http://mauricio.github.io/">Maurício Linhares</a> /
+                    <a href="http://twitter.com/mauriciojr">@mauriciojr</a> /
+                    <span style="text-shadow: -1px 0 black, 0 1px black, 1px 0 black, 0 -1px black;">Technical Lead at DigitalOcean</span>
+                </small>
+            </p>
+        </section>
+
+        <section>
+            <h1>What is a proxy server?</h1>
+        </section>
+
+        <section data-background-video="files/telephone.mp4" data-background-video-loop>
+        </section>
+
+        <section>
+            <h1>I mean, seriously</h1>
+            <p>Proxies act as intermediaries between clients and servers, they can perform processing
+                or just forward requests downstream.</p>
+        </section>
+
+        <section>
+            <h1>They come in many flavours</h1>
+            <ul>
+                <li>Database proxies</li>
+                <li>TCP proxies</li>
+                <li>HTTP proxies (the ones we'll focus today)</li>
+            </ul>
+        </section>
+
+        <section>
+            <h1>Why bother?</h1>
+            <ul>
+                <li>SSL termination</li>
+                <li>Connection management</li>
+                <li>Protocol upgrade/downgrade</li>
+                <li>Security, auditing, load balancing, caching, compression and so many more</li>
+            </ul>
+        </section>
+
+        <section>
+            <h1>HTTP proxies!</h1>
+            <p>They're much more complicated than you think</p>
+        </section>
+
+        <section>
+            <h1>Correctly handle hop-by-hop headers</h1>
+            <ul>
+                <li>Proxy-*</li>
+                <li>Upgrade</li>
+                <li>Keep-Alive</li>
+                <li>Transfer-Encoding</li>
+            </ul>
+        </section>
+
+        <section>
+            <h1>Forward original client headers</h1>
+            <ul>
+                <li>X-Forwarded-Proto</li>
+                <li>X-Forwarded-Host</li>
+            </ul>
+        </section>
+
+        <section>
+            <h1>Streaming?</h1>
+            <ul>
+                <li>Transfer-Encoding: chuncked</li>
+                <li>Large Content-Length values</li>
+            </ul>
+        </section>
+
+        <section>
+            <h1>But be careful with impossible situations</h1>
+            <p>You can't both have a <em>Content-Length</em> and
+                <em>Transfer-Encoding: chuncked</em>
+                at the same time.
+            </p>
+        </section>
+
+        <section>
+            <h1>Assume the worst</h1>
+            <p>
+                CloudFlare and CloudBleed? Yup, been there, done that.
+            </p>
+        </section>
+
+        <section>
+            <h1>Respect <code>Cache-Control</code> headers</h1>
+            <p>
+                Or try, at least.
+            </p>
+        </section>
+
+        <section>
+            <h1>Careful with buffers</h1>
+            <p>Do not read data without bounds from request bodies,
+                make sure you're buffering and have clear limits on how much
+                memory or connections you can use.</p>
+        </section>
+
+        <section>
+            <h1>Be specific on your errors</h1>
+            <ul>
+                <li>No <em>chuncked</em> support? Return <code>411 Length Required</code></li>
+                <li>Request does not contain authentication details? <code>401 Unauthorized</code></li>
+                <li>Request contains authentication but creds are invalid? <code>403 Forbidden</code></li>
+            </ul>
+        </section>
+
+        <section>
+            <h1>Use a <code>Via</code>/<code>Server</code> header to define the source of responses</h1>
+        </section>
+
+        <section>
+            <h1>Log everything, log nothing</h1>
+            <ul>
+                <li>Some headers are sensitive</li>
+                <li>Some request bodies are sensitive</li>
+                <li>Carefully select the information you want to log</li>
+            </ul>
+        </section>
+
+        <section>
+            <h1>Why are the fine folks at DigitalOcean building a proxy?</h1>
+        </section>
+
+        <section data-background-video="files/this-is-fine.mp4" data-background-video-loop>
+        </section>
+
+        <section>
+            <h1>Microservices!</h1>
+        </section>
+
+        <section>
+            <h1>Our lovely monolith needs to die</h1>
+            <p>In a huge fire</p>
+        </section>
+
+        <section>
+            <h1>Edge Gateway comes to the rescue</h1>
+            <ul>
+                <li>Routing</li>
+                <li>Authentication</li>
+                <li>Logging</li>
+                <li>Rate limiting</li>
+                <li>Health checking</li>
+            </ul>
+        </section>
+
+        <section>
+            <h1>No batteries included</h1>
+            <ul>
+                <li>All communication is over HTTP and headers</li>
+                <li>Downstream services do not depend on the proxy</li>
+                <li>Proxy receives service registration requests and directs traffic to them</li>
+            </ul>
+        </section>
+
+        <section>
+            <h1>Why?</h1>
+            <ul>
+                <li>No libraries to depend on</li>
+                <li>No lockstep deployments or circular dependencies</li>
+            </ul>
+        </section>
+
+        <section>
+            <h1>Problems?</h1>
+            <ul>
+                <li>HTTP is open ended, parsing bodies is still under service implementors</li>
+                <li>Services still have to manage their own HTTP servers</li>
+            </ul>
+        </section>
+
+        <section>
+            <h1>What did we look at?</h1>
+            <ul>
+                <li>Vulcan</li>
+                <li>FastHTTP</li>
+                <li>Go's std HTTP server</li>
+                <li>Gorilla HTTP stack</li>
+                <lo>go-kit</lo>
+            </ul>
+        </section>
+
+        <section>
+            <h1>Gorilla won</h1>
+            <ul>
+                <li>Fast enough</li>
+                <li>Nice integration between router and mux</li>
+                <li>Websockets implementation was a plus</li>
+            </ul>
+        </section>
+
+        <section>
+            <h1>Why not use a packaged solution?</h1>
+            <ul>
+                <li>Most other solutions are hard to customize (Luascript or Nodejs scripting)</li>
+                <li>Go is the main language being used internally now, so JVM based solutions
+                    wouldn't make much sense
+                </li>
+                <li>Easier to integrate with existing internal infrastructure services</li>
+            </ul>
+        </section>
+
+        <section>
+            <h1>How does it look like?</h1>
+        </section>
+
+        <section>
+            <p>
+                <img src="files/gateway.png"/>
+            </p>
+        </section>
+
+        <section>
+            <h1>
+                Filter based design
+            </h1>
+            <ul>
+                <li>Request arrives</li>
+                <li>Is matched against a specific route</li>
+                <li>Goes through the configured collection of before filters</li>
+                <li>Is sent to the backend service</li>
+                <li>Goes through the configured after filters</li>
+                <li>Delivers response to client</li>
+            </ul>
+        </section>
+
+        <section>
+            <h1>Dead simple</h1>
+            <pre>
+                <code data-frim data-noescape class="golang">
+type Filter interface {
+	Name() string
+}
+
+type BeforeFilter interface {
+	Filter
+	BlacklistedHeaders() []string
+	DoBefore(context context.Context) BeforeFilterError
+}
+
+type AfterFilter interface {
+	Filter
+	DoAfter(context context.Context) AfterFilterError
+}
+                </code>
+            </pre>
+        </section>
+
+        <section>
+            <h1>Disable URL cleaning</h1>
+            <ul>
+                <li>On Gorilla <code>Route.SkipClean(true)</code></li>
+                <li>Don't use <code>http.ServeMux</code></li>
+            </ul>
+        </section>
+
+        <section>
+            <h1>What about the proxy client side?</h1>
+        </section>
+
+        <section>
+            <h1>Limit everything</h1>
+            <p>Go's HTTP client defaults are pretty awful</p>
+        </section>
+
+        <section>
+            <pre>
+                <code data-trim data-noescape class="golang">client: &http.Client{
+    Timeout: clientTimeout,
+    Transport: trace.HTTPTransport(&http.Transport{
+        Dial:                  dialer.Dial(),
+        DialContext:           dialer.DialContext(),
+        TLSHandshakeTimeout:   tlsHandshakeTimeout,
+        ResponseHeaderTimeout: responseHeaderTimeout,
+        ExpectContinueTimeout: time.Second,
+        MaxIdleConns:          int(maxIdleConns),
+        DisableCompression:    true,
+    }),
+    CheckRedirect: func(req *http.Request, via []*http.Request) error {
+        return http.ErrUseLastResponse
+    },
+},
+                </code>
+            </pre>
+        </section>
+
+        <section>
+            <h1>Got a response? Close it!</h1>
+            <pre>
+                <code data-frim data-noescape class="golang">
+response, err := h.client().Do(request)
+
+if response != nil && response.Body != nil {
+    defer func() {
+        io.Copy(ioutil.Discard, response.Body)
+        response.Body.Close()
+    }()
+}
+                </code>
+            </pre>
+        </section>
+
+        <section>
+            <h1>Health checking?</h1>
+            <ul>
+                <li>Don't reuse connections</li>
+                <li>Set the user-agent header</li>
+                <li>Timeouts, don't forget the timeouts</li>
+                <li>Rails app that requires HTTPS? Remember to allow for header overrides</li>
+                <li>Log the actual error if it fails</li>
+            </ul>
+        </section>
+
+        <section>
+            <h1>Have metrics</h1>
+            <ul>
+                <li>How granular? Service level? Route level?</li>
+                <li>Be careful with URL based metrics in Restful services (/droplets/1)</li>
+                <li>How do we account for timeouts?</li>
+            </ul>
+        </section>
+
+        <section>
+            <h1>The proxy is always to blame</h1>
+            <ul>
+                <li>The proxy is broken!</li>
+                <li>The service is broken!</li>
+                <li>I don't know what is broken!</li>
+            </ul>
+        </section>
+
+        <section>
+            <h1>
+                Make sure troubleshooting is easy
+            </h1>
+        </section>
+
+        <section>
+            <h1>Limit connections</h1>
+            <p>
+                Go's standard dialer and HTTP client does not limit connections,
+                you can run out of file handles if you don't limit them.
+            </p>
+        </section>
+
+        <section>
+            <h1>How is it going?</h1>
+            <ul>
+                <li>Serves almost all traffic into DO properties</li>
+                <li>Logs, metrics and dashboards to all properties behind it</li>
+                <li>Lacks comprehensive documentation and examples</li>
+                <li>Very little performance impact</li>
+            </ul>
+        </section>
+
+        <section>
+            <h1>Questions?</h1>
+        </section>
+
+        <section>
+            <h1>Thanks!</h1>
+            <p>We're hiring! <a href="https://www.digitalocean.com/company/careers/">https://www.digitalocean.com/company/careers/</a></p>
+        </section>
+
+    </div>
+</div>
+
+<script src="lib/js/head.min.js"></script>
+<script src="js/reveal.js"></script>
+
+<script>
+    // More info https://github.com/hakimel/reveal.js#configuration
+    Reveal.initialize({
+        history: true,
+
+        // More info https://github.com/hakimel/reveal.js#dependencies
+        dependencies: [
+            {src: 'plugin/markdown/marked.js'},
+            {src: 'plugin/markdown/markdown.js'},
+            {src: 'plugin/notes/notes.js', async: true},
+            {
+                src: 'plugin/highlight/highlight.js', async: true, callback: function () {
+                hljs.initHighlightingOnLoad();
+            }
+            }
+        ]
+    });
+</script>
+</body>
+</html>
